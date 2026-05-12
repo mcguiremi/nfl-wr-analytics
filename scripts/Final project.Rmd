@@ -38,9 +38,6 @@ The career dataset contains NFL career statistics and Approximate Value (AV).
 The datasets were merged using player names and career start year to correctly handle players with duplicate names.
 
 ```{r}
-# Install these only once
-install.packages("readxl")
-install.packages("readr")
 
 # Load packages
 library(dplyr)
@@ -111,12 +108,6 @@ Scatterplots were created to visualize relationships between combine metrics and
 combine_untimed_metrics <- c("Vertical_Jump", "Bench_Press", "Broad_Jump")
 combine_timed_metrics <- c("Forty", "3_Cone_Drill", "20_yd_Shuttle")
 
-# make sure they are numeric
-merged_data[combine_metrics] <- lapply(
-  merged_data[combine_metrics],
-  as.numeric
-)
-
 # graph non-timed metrics
 for(metric in combine_untimed_metrics) {
   
@@ -138,10 +129,10 @@ for(metric in combine_timed_metrics) {
   
   p <- ggplot(
     merged_data,
-    aes(x = .data[[metric]], y = AV_per_season)
-  ) +
+    aes(x = .data[[metric]], y = AV_per_season)) +
     geom_point(alpha = 0.5) +
     geom_smooth(method = "lm", se = FALSE) +
+    scale_x_reverse() +
     labs(title = paste(metric, "vs AV Per Season"), x = metric, y = "AV Per Season")
       #Save graph
       ggsave(
@@ -222,7 +213,8 @@ ggplot(
 
 ## Conclusion
 
-Overall, the models showed that combine metrics had limited predictive power for wide receiver success. The 40-yard dash appeared to be the strongest individual predictor, but the overall R-squared values were low, meaning combine drills explained only a small portion of the variation in AV. This suggests that NFL wide receiver success depends on many other factors beyond combine testing, such as route running, hands, football IQ, quarterback play, team opportunity, and offensive system.
+Overall, the models showed that combine metrics had limited predictive power for wide receiver success. 
+The 40-yard dash appeared to be the strongest individual predictor, but the overall R-squared values were low, meaning combine drills explained only a small portion of the variation in AV. This suggests that NFL wide receiver success depends on many other factors beyond combine testing, such as route running, hands, football IQ, quarterback play, team opportunity, and offensive system.
 
 Future improvements to this project could include:
 - incorporating college production statistics
