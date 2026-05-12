@@ -8,8 +8,34 @@ date: "2026-05-11"
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
+## Introduction
 
+The purpose of this project is to investigate whether NFL combine metrics can predict the future success of wide receivers in the NFL. The NFL combine is widely used by teams to evaluate athleticism and draft prospects, but there is uncertainty regarding how predictive these metrics actually are for player performance.
+
+I decided to focus specifically on wide receivers, we were limited to receivers after 2000 due to the data sets available. I attempted to examine relationships between combine performance metrics and Approximate Value (AV), a statistic developed by Pro Football Reference to estimate overall player contribution.
+
+The primary research question for this project is:
+
+"Which NFL combine metrics are most predictive of wide receiver success?"
+
+## Dataset Description
+
+Two datasets were used for this project:
+
+1. NFL Combine Dataset from kaggle
+2. Pro Football Reference Career Dataset
+
+The combine dataset contains athletic testing measurements such as:
+- 40-yard dash
+- Vertical jump
+- Broad jump
+- Bench press
+- 3-cone drill
+- 20-yard shuttle
+
+The career dataset contains NFL career statistics and Approximate Value (AV).
+
+The datasets were merged using player names and career start year to correctly handle players with duplicate names.
 
 ```{r}
 # Install these only once
@@ -26,32 +52,25 @@ library(tidyr)
 
 # Read the Excel career file
 career_data <- read_excel(
-  "C:/Users/24mmc/OneDrive - University of Wisconsin - Platteville/Spring Semesters/Spring 26/Data Science 1/Final Project/sportsref_download.xlsx"
-)
+  "C:/Users/24mmc/OneDrive - University of Wisconsin - Platteville/Spring Semesters/Spring 26/Data Science 1/Final Project/sportsref_download.xlsx")
 
 # Read the combine CSV file
 combine_data <- read_csv(
-  "C:/Users/24mmc/OneDrive - University of Wisconsin - Platteville/Spring Semesters/Spring 26/Data Science 1/Final Project/NFL_Combine_Since_2000.csv"
-)
-combine_wr <- combine_data %>%
-  filter(Position == "WR")
-
-career_wr <- career_data %>%
-  filter(
-    Pos == "WR",
-    From >= 2000
-  )
-
-# Check that they loaded
-head(career_data)
-head(combine_data)
-
-# See column names
-names(career_data)
-names(combine_data)
+  "C:/Users/24mmc/OneDrive - University of Wisconsin - Platteville/Spring Semesters/Spring 26/Data Science 1/Final Project/NFL_Combine_Since_2000.csv")
 ```
 
+## Data Cleaning and Preprocessing
 
+Several steps were required before analysis:
+
+- Filtered combine dataset to include only wide receivers
+- Filtered players whose careers began in 2000 or later
+- Standardized player names by removing punctuation and capitalization differences
+- Removed duplicate rows caused by merging players with identical names
+- Created a new variable called AV_per_season to normalize career value by career length
+- Replaced spaces and dashes with underscores in the column names
+
+Missing combine data was a significant limitation of the dataset because many players did not participate in every combine drill.
 
 ```{r}
 clean_names <- function(x) {
@@ -63,6 +82,11 @@ clean_names <- function(x) {
     str_replace_all(" ii", "") %>%
     str_squish()
 }
+combine_wr <- combine_data %>%
+  filter(Position == "WR")
+
+career_wr <- career_data %>%
+  filter(Pos == "WR",From >= 2000)
 
 career_wr$Player <- clean_names(career_wr$Player)
 combine_wr$Player <- clean_names(combine_wr$Player)
@@ -70,50 +94,22 @@ combine_wr$Player <- clean_names(combine_wr$Player)
 merged_data <- inner_join(career_wr, combine_wr, by = c("Player", "From" = "Year")) %>%
   distinct() %>%
   rename(Draft_Team = Team.y, Career_AV = AV...3, Forty = "40-yd Dash") %>%
-  
   select(-AV...9, -Team.x, -Rk, -Position) %>%
-  
-  mutate(
-    Seasons = To - From + 1,
-    AV_per_season = Career_AV / Seasons
-  )
+  mutate(Seasons = To - From + 1, AV_per_season = Career_AV / Seasons)
+
 names(merged_data) <- names(merged_data) %>%
   gsub(" ", "_", .) %>%
   gsub("-", "_", .)
-head(merged_data)
-nrow(merged_data)
 ```
 
+## Exploratory Data Analysis
 
-
-
-```{r}
-merged_data %>%
-  count(Player) %>%
-  filter(n > 1)
-
-merged_data %>%
-  filter(Player == "kyle williams")
-```
-
-
-```{r}
-combine_wr %>%
-  count(Player) %>%
-  filter(n > 1)
-```
-
+Scatterplots were created to visualize relationships between combine metrics and AV_per_season. Timed combine drills were plotted with reversed x-axes so that better athletic performances appear farther to the right for easier interpretation. Regression trend lines were added to help identify potential linear relationships.
 
 ```{r}
 # combine metrics to graph
-combine_metrics <- c(
-  "Forty",
-  "Vertical_Jump",
-  "Bench_Press",
-  "Broad_Jump",
-  "3_Cone_Drill",
-  "20_yd_Shuttle"
-)
+combine_untimed_metrics <- c("Vertical_Jump", "Bench_Press", "Broad_Jump")
+combine_timed_metrics <- c("Forty", "3_Cone_Drill", "20_yd_Shuttle")
 
 # make sure they are numeric
 merged_data[combine_metrics] <- lapply(
@@ -121,8 +117,8 @@ merged_data[combine_metrics] <- lapply(
   as.numeric
 )
 
-# graph all metrics
-for(metric in combine_metrics) {
+# graph non-timed metrics
+for(metric in combine_untimed_metrics) {
   
   p <- ggplot(
     merged_data,
@@ -130,15 +126,49 @@ for(metric in combine_metrics) {
   ) +
     geom_point(alpha = 0.5) +
     geom_smooth(method = "lm", se = FALSE) +
-    labs(
-      title = paste(metric, "vs AV Per Season"),
-      x = metric,
-      y = "AV Per Season"
-    )
+    labs(title = paste(metric, "vs AV Per Season"), x = metric, y = "AV Per Season")
+      #Save graph
+      ggsave(
+    filename = paste0("plots/", metric, "_vs_AV.png"), plot = p, width = 8, height = 6)
+  print(p)
+}
+
+# graph timed metrics
+for(metric in combine_timed_metrics) {
   
+  p <- ggplot(
+    merged_data,
+    aes(x = .data[[metric]], y = AV_per_season)
+  ) +
+    geom_point(alpha = 0.5) +
+    geom_smooth(method = "lm", se = FALSE) +
+    labs(title = paste(metric, "vs AV Per Season"), x = metric, y = "AV Per Season")
+      #Save graph
+      ggsave(
+    filename = paste0("plots/", metric, "_vs_AV.png"), plot = p, width = 8, height = 6)
   print(p)
 }
 ```
+
+
+The visualizations suggest weak relationships between most combine metrics and AV_per_season. While faster 40-yard dash times appear to show slightly higher NFL success, the data contains substantial variability and overlap between successful and unsuccessful players.
+
+## Statistical Analysis
+
+Multiple linear regression was used to examine whether combine metrics could predict AV_per_season.
+
+The model included:
+- 40-yard dash
+- Vertical jump
+- Bench press
+- Broad jump
+- 3-cone drill
+- 20-yard shuttle
+
+The regression model produced a low R-squared value of approximately 0.038, indicating that combine metrics explained only about 3.8% of the variation in wide receiver career success.
+
+Additionally, none of the individual combine metrics were statistically significant predictors at the 0.05 significance level.
+
 ```{r}
 model <- lm(
   AV_per_season ~ Forty +
@@ -151,7 +181,51 @@ model <- lm(
 )
 
 summary(model)
+
+speed_model <- lm(
+  AV_per_season ~ Forty +
+    `20_yd_Shuttle` +
+    `3_Cone_Drill`,
+  data = merged_data
+)
+
+summary(speed_model)
+
+explosion_model <- lm(
+  AV_per_season ~ Vertical_Jump +
+    Broad_Jump,
+  data = merged_data
+)
+
+summary(explosion_model)
+```
+
+## Machine Learning Approach
+
+For the machine learning portion of this project, I used multiple linear regression to predict AV per season from NFL Combine metrics. Linear regression was appropriate because the response variable, AV per season, is numerical and continuous. The goal was not just to make predictions, but also to understand which athletic traits appeared to have the strongest relationship with wide receiver success.
+
+I first created a full model using all available combine metrics: 40-yard dash, vertical jump, bench press, broad jump, 3-cone drill, and 20-yard shuttle. However, this model removed many players because linear regression only uses rows with complete data for every variable in the model. Since many players did not participate in every combine drill, this reduced the sample size substantially.
+
+To better handle the missing data issue, I also created smaller models based on trait categories. The speed/agility model used 40-yard dash, 20-yard shuttle, and 3-cone drill. The explosion model used vertical jump and broad jump. This allowed more players to remain in each model while still testing meaningful athletic categories.
+
+```{r}
+merged_data <- merged_data %>%
+  mutate(Explosion_Score = Vertical_Jump + Broad_Jump)
+
+ggplot(
+  merged_data,
+  aes(x = Explosion_Score, y = AV_per_season)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm")
 ```
 
 
+## Conclusion
 
+Overall, the models showed that combine metrics had limited predictive power for wide receiver success. The 40-yard dash appeared to be the strongest individual predictor, but the overall R-squared values were low, meaning combine drills explained only a small portion of the variation in AV. This suggests that NFL wide receiver success depends on many other factors beyond combine testing, such as route running, hands, football IQ, quarterback play, team opportunity, and offensive system.
+
+Future improvements to this project could include:
+- incorporating college production statistics
+- developing composite athleticism scores
+
+Overall, this project demonstrates both the usefulness and limitations of combine testing in evaluating NFL wide receiver prospects.
