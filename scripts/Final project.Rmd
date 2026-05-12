@@ -10,23 +10,6 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## R Markdown
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
-```
-
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
 
 ```{r}
 # Install these only once
@@ -34,8 +17,12 @@ install.packages("readxl")
 install.packages("readr")
 
 # Load packages
-library(readxl)
+library(dplyr)
+library(ggplot2)
 library(readr)
+library(readxl)
+library(stringr)
+library(tidyr)
 
 # Read the Excel career file
 career_data <- read_excel(
@@ -90,6 +77,9 @@ merged_data <- inner_join(career_wr, combine_wr, by = c("Player", "From" = "Year
     Seasons = To - From + 1,
     AV_per_season = Career_AV / Seasons
   )
+names(merged_data) <- names(merged_data) %>%
+  gsub(" ", "_", .) %>%
+  gsub("-", "_", .)
 head(merged_data)
 nrow(merged_data)
 ```
@@ -115,16 +105,53 @@ combine_wr %>%
 
 
 ```{r}
-library(ggplot2)
+# combine metrics to graph
+combine_metrics <- c(
+  "Forty",
+  "Vertical_Jump",
+  "Bench_Press",
+  "Broad_Jump",
+  "3_Cone_Drill",
+  "20_yd_Shuttle"
+)
 
-ggplot(merged_data,
-       aes(x = forty , y = AV_per_season)) +
-  geom_point() +
-  geom_smooth(method = "lm") +
-  labs(
-    title = "40 Time vs AV Per Season",
-    x = "40 Yard Dash",
-    y = "AV Per Season"
-  )
+# make sure they are numeric
+merged_data[combine_metrics] <- lapply(
+  merged_data[combine_metrics],
+  as.numeric
+)
+
+# graph all metrics
+for(metric in combine_metrics) {
+  
+  p <- ggplot(
+    merged_data,
+    aes(x = .data[[metric]], y = AV_per_season)
+  ) +
+    geom_point(alpha = 0.5) +
+    geom_smooth(method = "lm", se = FALSE) +
+    labs(
+      title = paste(metric, "vs AV Per Season"),
+      x = metric,
+      y = "AV Per Season"
+    )
+  
+  print(p)
+}
 ```
+```{r}
+model <- lm(
+  AV_per_season ~ Forty +
+    Vertical_Jump +
+    Bench_Press +
+    Broad_Jump +
+    `3_Cone_Drill` +
+    `20_yd_Shuttle`,
+  data = merged_data
+)
+
+summary(model)
+```
+
+
 
